@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo
+  namespace: production
+spec:
+  # THE SCALING FACTOR:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: podinfo
+  template:
+    metadata:
+      labels:
+        app: podinfo
+    spec:
+      containers:
+      - name: podinfo
+        image: stefanprodan/podinfo:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9898
+
+        # THE SCALING TRICK:
+        # We request tiny resources so Kubernetes packs them tightly.
+        resources:
+          requests:
+            cpu: "5m"      # 0.005 CPU cores
+            memory: "16Mi" # 16 Megabytes RAM
+          limits:
+            cpu: "100m"    # Cap it so it doesn't crash the node
+            memory: "64Mi"
+
+        # PRO CHECKS:
+        # Kills the container if it freezes (Self-Healing)
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9898
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        # Waits until app is ready before sending traffic
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9898
+          initialDelaySeconds: 5
+          periodSeconds: 10
