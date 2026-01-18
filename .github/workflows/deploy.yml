@@ -1,8 +1,9 @@
-name: Deploy to Production
+name: Deploy to GKE
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
 
 env:
   PROJECT_ID: our-shield-480712-i3
@@ -10,44 +11,39 @@ env:
   GKE_ZONE: us-central1-a
 
 jobs:
-  setup-build-publish-deploy:
-    name: Setup, Build, Publish, and Deploy
+  deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
     steps:
-    - name: Checkout
+    - name: Checkout code
       uses: actions/checkout@v4
 
     # 1. Authenticate to Google Cloud
-    - id: 'auth'
-      uses: 'google-github-actions/auth@v2'
+    - name: Google Auth
+      uses: google-github-actions/auth@v2
       with:
-        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-    # 2. Setup Terraform
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-
-    # 3. Terraform Init
-    - name: Terraform Init
-      run: terraform init
-      working-directory: ./terraform
-
-    # 4. Terraform Apply
-    - name: Terraform Apply
-      run: terraform apply -auto-approve
-      working-directory: ./terraform
-
-    # 5. Connect to GKE
-    - name: Get GKE Credentials
+    # 2. Get Cluster Credentials
+    - name: Set up GKE credentials
       uses: google-github-actions/get-gke-credentials@v2
       with:
         cluster_name: ${{ env.GKE_CLUSTER }}
         location: ${{ env.GKE_ZONE }}
 
-    # 6. Deploy App
-    - name: Deploy Podinfo
+    # 3. Create Grafana Secret (Secure Injection)
+    # This takes the password from GitHub and creates a K8s secret on the fly
+    - name: Create Grafana Secret
       run: |
-        kubectl apply -f k8s/namespace.yaml
-        kubectl apply -f k8s/deployment.yaml
-        kubectl apply -f k8s/service.yaml
+        kubectl create secret generic grafana-agent-credentials \
+          --namespace=production \
+          --from-literal=token='${{ secrets.GRAFANA_TOKEN }}' \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    # 4. Deploy Everything (App + Monitoring)
+    - name: Deploy Manifests
+      run: |
+        kubectl apply -f k8s/ --recursive
