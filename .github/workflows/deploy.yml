@@ -44,7 +44,7 @@ jobs:
         kubectl apply -f k8s/ --recursive
 
     # --- 3. DEPLOY MONITORING (The Fix) ---
-    # Added 'alloy-metrics.enabled=true' and 'alloy-logs.enabled=true'
+    # Added 'alloy-singleton.enabled=true' to the bottom
     - name: Deploy Grafana Monitoring Stack
       run: |
         helm repo add grafana https://grafana.github.io/helm-charts
@@ -72,4 +72,5 @@ jobs:
           --set prometheus-node-exporter.enabled=true \
           --set opencost.enabled=false \
           --set alloy-metrics.enabled=true \
-          --set alloy-logs.enabled=true
+          --set alloy-logs.enabled=true \
+          --set alloy-singleton.enabled=true
