@@ -1,3 +1,46 @@
+# --- 1. THE IDENTITY (Service Account) ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-alloy
+  namespace: production
+
+---
+# --- 2. THE PERMISSIONS (ClusterRole) ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: grafana-alloy
+rules:
+  # Allow the agent to see Nodes, Pods, and Services
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  # Allow the agent to read ConfigMaps (for its own config)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # Allow non-resource URLs for metrics
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+
+---
+# --- 3. THE BINDING (Connect Identity to Permissions) ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana-alloy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: grafana-alloy
+subjects:
+  - kind: ServiceAccount
+    name: grafana-alloy
+    namespace: production
+
+---
+# --- 4. THE CONFIGURATION (ConfigMap) ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,12 +53,12 @@ data:
       format = "logfmt"
     }
 
-    // --- 1. DISCOVERY ---
+    // Discover Kubernetes Pods
     discovery.kubernetes "k8s_pods" {
       role = "pod"
     }
 
-    // --- 2. METRICS (PROMETHEUS) ---
+    // Scrape Metrics (Prometheus)
     prometheus.scrape "k8s_pods_scrape" {
       targets    = discovery.kubernetes.k8s_pods.targets
       forward_to = [prometheus.remote_write.grafana_cloud.receiver]
@@ -31,7 +74,7 @@ data:
       }
     }
 
-    // --- 3. LOGS (LOKI) ---
+    // Scrape Logs (Loki)
     loki.source.kubernetes "k8s_logs" {
       targets    = discovery.kubernetes.k8s_pods.targets
       forward_to = [loki.write.grafana_loki.receiver]
@@ -48,6 +91,7 @@ data:
     }
 
 ---
+# --- 5. THE AGENT (DaemonSet) ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -64,6 +108,7 @@ spec:
       labels:
         app: grafana-alloy
     spec:
+      serviceAccountName: grafana-alloy  # <--- WE ADDED THIS LINE
       containers:
       - name: alloy
         image: grafana/alloy:latest
@@ -80,7 +125,6 @@ spec:
         volumeMounts:
         - name: config
           mountPath: /etc/alloy
-        # Mount the host logs so Alloy can read them
         - name: varlog
           mountPath: /var/log
         - name: varlibdockercontainers
