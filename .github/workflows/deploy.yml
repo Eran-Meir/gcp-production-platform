@@ -5,8 +5,8 @@ on:
     branches: [ "main" ]
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GKE_CLUSTER: production-cluster    # The name we chose in Terraform
+  PROJECT_ID: our-shield-480712-i3
+  GKE_CLUSTER: production-cluster
   GKE_ZONE: us-central1-a
 
 jobs:
@@ -28,23 +28,24 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
 
-    # 3. Apply Infrastructure (If changed)
+    # 3. Terraform Init
     - name: Terraform Init
       run: terraform init
       working-directory: ./terraform
 
+    # 4. Terraform Apply
     - name: Terraform Apply
       run: terraform apply -auto-approve
       working-directory: ./terraform
 
-    # 4. Get Kubeconfig (Connect to the new cluster)
+    # 5. Connect to GKE
     - name: Get GKE Credentials
       uses: google-github-actions/get-gke-credentials@v2
       with:
         cluster_name: ${{ env.GKE_CLUSTER }}
         location: ${{ env.GKE_ZONE }}
 
-    # 5. Deploy App (Podinfo)
+    # 6. Deploy App
     - name: Deploy Podinfo
       run: |
         kubectl apply -f k8s/namespace.yaml
