@@ -44,8 +44,7 @@ jobs:
         kubectl apply -f k8s/ --recursive
 
     # --- 3. DEPLOY MONITORING (The Fix) ---
-    # We pass the token directly using --set password=...
-    # This bypasses the validation error.
+    # Added 'alloy-metrics.enabled=true' and 'alloy-logs.enabled=true'
     - name: Deploy Grafana Monitoring Stack
       run: |
         helm repo add grafana https://grafana.github.io/helm-charts
@@ -71,4 +70,6 @@ jobs:
           --set podLogs.enabled=true \
           --set kube-state-metrics.enabled=true \
           --set prometheus-node-exporter.enabled=true \
-          --set opencost.enabled=false
+          --set opencost.enabled=false \
+          --set alloy-metrics.enabled=true \
+          --set alloy-logs.enabled=true
