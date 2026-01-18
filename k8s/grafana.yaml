@@ -12,24 +12,20 @@ kind: ClusterRole
 metadata:
   name: grafana-alloy
 rules:
-  # Allow the agent to see Nodes, Pods, and Services
   - apiGroups: [""]
     resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods", "namespaces"]
     verbs: ["get", "list", "watch"]
-  # NEW: Allow the agent to READ THE LOGS
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get", "list", "watch"]
-  # Allow the agent to read ConfigMaps (for its own config)
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "watch"]
-  # Allow non-resource URLs for metrics
   - nonResourceURLs: ["/metrics"]
     verbs: ["get"]
 
 ---
-# --- 3. THE BINDING (Connect Identity to Permissions) ---
+# --- 3. THE BINDING ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -44,7 +40,7 @@ subjects:
     namespace: production
 
 ---
-# --- 4. THE CONFIGURATION (ConfigMap) ---
+# --- 4. THE CONFIGURATION (With Relabeling Fixes) ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -57,14 +53,36 @@ data:
       format = "logfmt"
     }
 
-    // Discover Kubernetes Pods
+    // --- DISCOVERY ---
     discovery.kubernetes "k8s_pods" {
       role = "pod"
     }
 
-    // Scrape Metrics (Prometheus)
+    // --- RELABELING (The Fix) ---
+    // This adds readable names (Namespace, Pod) to your metrics
+    discovery.relabel "k8s_pods_labeled" {
+      targets = discovery.kubernetes.k8s_pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        action = "replace"
+        target_label = "namespace"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        action = "replace"
+        target_label = "pod"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_node_name"]
+        action = "replace"
+        target_label = "node"
+      }
+    }
+
+    // --- METRICS ---
     prometheus.scrape "k8s_pods_scrape" {
-      targets    = discovery.kubernetes.k8s_pods.targets
+      targets    = discovery.relabel.k8s_pods_labeled.output
       forward_to = [prometheus.remote_write.grafana_cloud.receiver]
     }
 
@@ -76,11 +94,15 @@ data:
           password = nonsensitive(sys.env("GRAFANA_TOKEN"))
         }
       }
+      // VITAL: This tells the dashboard which cluster this is
+      external_labels = {
+        cluster = "production-cluster",
+      }
     }
 
-    // Scrape Logs (Loki)
+    // --- LOGS ---
     loki.source.kubernetes "k8s_logs" {
-      targets    = discovery.kubernetes.k8s_pods.targets
+      targets    = discovery.relabel.k8s_pods_labeled.output
       forward_to = [loki.write.grafana_loki.receiver]
     }
 
@@ -91,6 +113,9 @@ data:
           username = "1456139"
           password = nonsensitive(sys.env("GRAFANA_TOKEN"))
         }
+      }
+      external_labels = {
+        cluster = "production-cluster",
       }
     }
 
@@ -112,7 +137,7 @@ spec:
       labels:
         app: grafana-alloy
     spec:
-      serviceAccountName: grafana-alloy  # <--- WE ADDED THIS LINE
+      serviceAccountName: grafana-alloy
       containers:
       - name: alloy
         image: grafana/alloy:latest
