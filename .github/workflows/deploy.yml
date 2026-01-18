@@ -21,21 +21,25 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 1. Authenticate to Google Cloud
-    - name: Google Auth
+    # --- 1. SETUP TOOLS ---
+    - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
         credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-    # 2. Get Cluster Credentials
     - name: Set up GKE credentials
       uses: google-github-actions/get-gke-credentials@v2
       with:
         cluster_name: ${{ env.GKE_CLUSTER }}
         location: ${{ env.GKE_ZONE }}
 
-    # 3. Create Grafana Secret (Secure Injection)
-    # This takes the password from GitHub and creates a K8s secret on the fly
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: v3.12.0
+
+    # --- 2. CREATE SECRETS ---
+    # We create the secret so Helm can find it
     - name: Create Grafana Secret
       run: |
         kubectl create secret generic grafana-agent-credentials \
@@ -43,7 +47,39 @@ jobs:
           --from-literal=token='${{ secrets.GRAFANA_TOKEN }}' \
           --dry-run=client -o yaml | kubectl apply -f -
 
-    # 4. Deploy Everything (App + Monitoring)
-    - name: Deploy Manifests
+    # --- 3. DEPLOY APP ---
+    # Deploys your Python App (Podinfo)
+    - name: Deploy Application
       run: |
         kubectl apply -f k8s/ --recursive
+
+    # --- 4. DEPLOY MONITORING (THE FIX) ---
+    # Installs the FULL Grafana Stack (Metrics, Logs, Node Exporter, Kube-State-Metrics)
+    - name: Deploy Grafana Monitoring Stack
+      run: |
+        helm repo add grafana https://grafana.github.io/helm-charts
+        helm repo update
+        helm upgrade --install grafana-k8s-monitoring grafana/k8s-monitoring \
+          --namespace production --create-namespace \
+          --atomic --timeout 300s \
+          --set cluster.name="production-cluster" \
+          --set destinations[0].name="grafana-cloud-metrics" \
+          --set destinations[0].type="prometheus" \
+          --set destinations[0].url="https://prometheus-prod-53-prod-me-central-1.grafana.net/api/prom/push" \
+          --set destinations[0].auth.type="basic" \
+          --set destinations[0].auth.username="2920933" \
+          --set destinations[0].auth.passwordFromSecret.name="grafana-agent-credentials" \
+          --set destinations[0].auth.passwordFromSecret.key="token" \
+          --set destinations[1].name="grafana-cloud-logs" \
+          --set destinations[1].type="loki" \
+          --set destinations[1].url="https://logs-prod-033.grafana.net/loki/api/v1/push" \
+          --set destinations[1].auth.type="basic" \
+          --set destinations[1].auth.username="1456139" \
+          --set destinations[1].auth.passwordFromSecret.name="grafana-agent-credentials" \
+          --set destinations[1].auth.passwordFromSecret.key="token" \
+          --set clusterMetrics.enabled=true \
+          --set clusterEvents.enabled=true \
+          --set podLogs.enabled=true \
+          --set kube-state-metrics.enabled=true \
+          --set prometheus-node-exporter.enabled=true \
+          --set opencost.enabled=false
