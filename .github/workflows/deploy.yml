@@ -1,9 +1,10 @@
 name: Deploy to GKE
 
 on:
-  push:
-    branches:
-      - main
+  # push:              <-- Commented out (Disabled)
+  #   branches:
+  #     - main
+  workflow_dispatch:   # <-- Enabled (Manual Click Only)
 
 env:
   PROJECT_ID: our-shield-480712-i3
