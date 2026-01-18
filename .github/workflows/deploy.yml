@@ -38,23 +38,14 @@ jobs:
       with:
         version: v3.12.0
 
-    # --- 2. CREATE SECRETS ---
-    # We create the secret so Helm can find it
-    - name: Create Grafana Secret
-      run: |
-        kubectl create secret generic grafana-agent-credentials \
-          --namespace=production \
-          --from-literal=token='${{ secrets.GRAFANA_TOKEN }}' \
-          --dry-run=client -o yaml | kubectl apply -f -
-
-    # --- 3. DEPLOY APP ---
-    # Deploys your Python App (Podinfo)
+    # --- 2. DEPLOY APP (Podinfo) ---
     - name: Deploy Application
       run: |
         kubectl apply -f k8s/ --recursive
 
-    # --- 4. DEPLOY MONITORING (THE FIX) ---
-    # Installs the FULL Grafana Stack (Metrics, Logs, Node Exporter, Kube-State-Metrics)
+    # --- 3. DEPLOY MONITORING (The Fix) ---
+    # We pass the token directly using --set password=...
+    # This bypasses the validation error.
     - name: Deploy Grafana Monitoring Stack
       run: |
         helm repo add grafana https://grafana.github.io/helm-charts
@@ -68,15 +59,13 @@ jobs:
           --set destinations[0].url="https://prometheus-prod-53-prod-me-central-1.grafana.net/api/prom/push" \
           --set destinations[0].auth.type="basic" \
           --set destinations[0].auth.username="2920933" \
-          --set destinations[0].auth.passwordFromSecret.name="grafana-agent-credentials" \
-          --set destinations[0].auth.passwordFromSecret.key="token" \
+          --set destinations[0].auth.password="${{ secrets.GRAFANA_TOKEN }}" \
           --set destinations[1].name="grafana-cloud-logs" \
           --set destinations[1].type="loki" \
           --set destinations[1].url="https://logs-prod-033.grafana.net/loki/api/v1/push" \
           --set destinations[1].auth.type="basic" \
           --set destinations[1].auth.username="1456139" \
-          --set destinations[1].auth.passwordFromSecret.name="grafana-agent-credentials" \
-          --set destinations[1].auth.passwordFromSecret.key="token" \
+          --set destinations[1].auth.password="${{ secrets.GRAFANA_TOKEN }}" \
           --set clusterMetrics.enabled=true \
           --set clusterEvents.enabled=true \
           --set podLogs.enabled=true \
