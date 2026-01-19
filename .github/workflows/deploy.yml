@@ -45,7 +45,6 @@ jobs:
         kubectl apply -f k8s/ --recursive
 
     # --- 3. DEPLOY MONITORING (The Fix) ---
-    # Added 'alloy-singleton.enabled=true' to the bottom
     - name: Deploy Grafana Monitoring Stack
       run: |
         helm repo add grafana https://grafana.github.io/helm-charts

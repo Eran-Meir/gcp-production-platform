@@ -1,6 +1,6 @@
 provider "google" {
-  project = "our-shield-480712-i3"
-  region  = "us-central1"
+  project = var.project_id
+  region = var.region
 }
 
 # 1. Enable Kubernetes API automatically
@@ -17,15 +17,15 @@ resource "google_compute_network" "vpc" {
 
 resource "google_compute_subnetwork" "subnet" {
   name          = "gke-subnet"
-  region        = "us-central1"
+  region        = var.region
   network       = google_compute_network.vpc.name
   ip_cidr_range = "10.10.0.0/24"
 }
 
 # 3. GKE Cluster (Control Plane)
 resource "google_container_cluster" "primary" {
-  name     = "production-cluster"
-  location = "us-central1-a"
+  name     = var.cluster_name
+  location = var.zone
 
   # Wait for API to be enabled
   depends_on = [google_project_service.container]
@@ -45,7 +45,7 @@ resource "google_container_cluster" "primary" {
 # 4. Spot Node Pool (The Cheap Workers)
 resource "google_container_node_pool" "primary_nodes" {
   name       = "spot-pool"
-  location   = "us-central1-a"
+  location   = var.zone
   cluster    = google_container_cluster.primary.name
   node_count = 2
 
