@@ -23,6 +23,24 @@ This project represents a **production-grade Kubernetes platform** built from sc
 
 The objective was to engineer a complete software delivery lifecycle, not just a simple cluster. This includes provisioning infrastructure on Google Cloud, automating application deployment via GitHub Actions, and implementing a secured, full-stack observability pipeline using the Grafana Stack (Mimir, Loki, and Alloy).
 
+```mermaid
+graph TD
+    User[Developer] -->|Push Code| Repo[GitHub Repository]
+    Repo -->|Trigger| Action[GitHub Actions Runner]
+    
+    subgraph CI_CD_Pipeline [Deploy to GKE Workflow]
+        Action -->|1. Auth| GCP[Google Cloud Platform]
+        Action -->|2. Apply Manifests| GKE[GKE Cluster]
+        Action -->|3. Inject Secrets| Helm[Helm Upgrade]
+    end
+    
+    subgraph Observability [Grafana Stack]
+        Helm -->|Deploy| Alloy[Grafana Alloy Agent]
+        Alloy -->|Push Logs| Loki[Grafana Loki]
+        Alloy -->|Push Metrics| Mimir[Grafana Mimir]
+    end
+   ```
+
 **Key Capabilities:**
 * **Zero-Touch Provisioning:** Infrastructure created and destroyed automatically via Terraform.
 * **GitOps CI/CD:** Applications are deployed immediately upon code commit using Helm.
