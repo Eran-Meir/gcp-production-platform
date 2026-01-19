@@ -120,7 +120,7 @@ To replicate this platform, you will need a GCP Project and a Grafana Cloud acco
 ### Quick Start
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/your-username/gcp-production-platform.git](https://github.com/your-username/gcp-production-platform.git)
+git clone https://github.com/Eran-Meir/gcp-production-platform.git
 
 # 2. Provision Infrastructure
 cd terraform
